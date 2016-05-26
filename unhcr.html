@@ -10,9 +10,178 @@
       }
     </style>
     <script src="http://maps.googleapis.com/maps/api/js"></script>
+    <script type="text/javascript" src="js/CanvasLayer.js"></script>
+    <script type="text/javascript" src="js/Glb.js"></script>
+    <script id="point-vertex-shader" type="x-shader/x-vertex">
+      attribute vec4 aCentroid; 
+      attribute float aStart;
+      attribute float aEnd;
+
+      uniform float uSize;
+      uniform mat4 uMapMatrix;
+
+      void main() {
+        vec4 position = uMapMatrix * aCentroid;
+
+        gl_Position = position;
+
+        float diameter = aStart - aEnd;
+        gl_PointSize = uSize*100.;
+      }
+    </script>
+    <script id="point-fragment-shader" type="x-shader/x-fragment">
+      precision mediump float;
+
+      void main() {
+        gl_FragColor = vec4(.5, .5, .5, 1.);
+      }
+
+    </script>
     <script type="text/javascript">
       var map;
+      var canvasLayer;
+      var gl;
+      var program;
+      var pixelsToWebGLMatrix = new Float32Array(16);
+      var mapMatrix = new Float32Array(16);
+      var countryPointSizePixels = 1;
+      var blockPointSizePixels = 10;
 
+      var refugees = {
+        url: "unhcr.bin",
+        ready: false,
+        pointCount: 0,
+        data: null,
+        arrayBuffer: null
+      };
+
+      function load(url) {
+        //console.log("Loading...");
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = function() {
+          var float32Array = new Float32Array(this.response);
+          setData(float32Array);
+          var el = document.getElementById("loading");
+          if (el) {
+            el.style['display'] = 'none';
+          }
+        }
+        xhr.send();
+      }
+
+      function setData(buffer) {
+        refugees.pointCount = buffer.length / 4;
+        refugees.data = buffer;
+        refugees.arrayBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, refugees.arrayBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, refugees.data, gl.STATIC_DRAW);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aCentroid');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 16, 0);
+
+
+        var attributeLoc = gl.getAttribLocation(program, 'aStart');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 16, 8);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aEnd');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 16, 12);
+
+        refugees.ready = true;
+      }
+
+      function draw(transform) {
+        console.log('draw')
+        if (refugees.ready) {
+          console.log('ready');
+          gl.useProgram(program);
+
+          var pointSize = countryPointSizePixels * Math.pow(blockPointSizePixels / countryPointSizePixels, (map.zoom - 7) / (21 - 7));
+          var sizeLoc = gl.getUniformLocation(program, 'uSize');
+          gl.uniform1f(sizeLoc, pointSize);
+
+          var matrixLoc = gl.getUniformLocation(program, 'uMapMatrix');
+          gl.uniformMatrix4fv(matrixLoc, false, transform);
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, refugees.arrayBuffer);
+
+          var attributeLoc = gl.getAttribLocation(program, 'aCentroid');
+          gl.enableVertexAttribArray(attributeLoc);
+          gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 16, 0);
+
+          var attributeLoc = gl.getAttribLocation(program, 'aStart');
+          gl.enableVertexAttribArray(attributeLoc);
+          gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 16, 8);
+
+          var attributeLoc = gl.getAttribLocation(program, 'aEnd');
+          gl.enableVertexAttribArray(attributeLoc);
+          gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 16, 12);
+
+
+          gl.drawArrays(gl.POINTS, 0, 1);
+        }
+      }
+
+      function scaleMatrix(matrix, scaleX, scaleY) {
+        matrix[0] *= scaleX;
+        matrix[1] *= scaleX;
+        matrix[2] *= scaleX;
+        matrix[3] *= scaleX;
+
+        matrix[4] *= scaleY;
+        matrix[5] *= scaleY;
+        matrix[6] *= scaleY;
+        matrix[7] *= scaleY;
+      }
+
+      function translateMatrix(matrix, tx, ty) {
+        matrix[12] += matrix[0]*tx + matrix[4]*ty;
+        matrix[13] += matrix[1]*tx + matrix[5]*ty;
+        matrix[14] += matrix[2]*tx + matrix[6]*ty;
+        matrix[15] += matrix[3]*tx + matrix[7]*ty;
+      }
+
+      function update() {
+        if (refugees.ready) {
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          var mapProjection = map.getProjection();
+          mapMatrix.set(pixelsToWebGLMatrix);
+          var scale = canvasLayer.getMapScale();
+          scaleMatrix(mapMatrix, scale, scale);
+          var translation = canvasLayer.getMapTranslation();
+          translateMatrix(mapMatrix, translation.x, translation.y);
+          draw(mapMatrix);
+        }       
+      }
+
+      function resize() {
+        console.log('resizeHandler');
+        var w = gl.canvas.width;
+        var h = gl.canvas.height;
+        gl.viewport(0, 0, w, h);
+
+        // matrix which maps pixel coordinates to WebGL coordinates
+        pixelsToWebGLMatrix.set([2/w, 0,   0, 0,
+          0,  -2/h, 0, 0,
+          0,   0,   0, 0,
+         -1,   1,   0, 1]);
+      }
+
+
+      function initCanvasLayer(map, update, resize) {
+        var canvasLayerOptions = {
+          map: map,
+          resizeHandler: resize,
+          animate: false,
+          updateHandler: update
+        };
+        return new CanvasLayer(canvasLayerOptions);
+      }
+ 
       function initMap() {
         var mapOptions = {
           zoom: 2,
@@ -24,6 +193,12 @@
 
       function init() {
         map = initMap();
+        canvasLayer = initCanvasLayer(map, update, resize);
+        gl = canvasLayer.canvas.getContext('experimental-webgl');
+        glb = new Glb(gl);
+        program = glb.programFromSources(document.getElementById('point-vertex-shader').text,
+                                         document.getElementById('point-fragment-shader').text);
+        load(refugees.url);
       }
 
       document.addEventListener('DOMContentLoaded', init, false);
