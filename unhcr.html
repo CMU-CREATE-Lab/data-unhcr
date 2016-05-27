@@ -9,15 +9,18 @@
       height: 100%;
       }
     </style>
+
     <script src="http://maps.googleapis.com/maps/api/js"></script>
     <script type="text/javascript" src="js/CanvasLayer.js"></script>
     <script type="text/javascript" src="js/Glb.js"></script>
+
     <script id="point-vertex-shader" type="x-shader/x-vertex">
       attribute vec4 aCentroid; 
       attribute float aStart;
       attribute float aEnd;
 
       uniform float uSize;
+      uniform float uStep;
       uniform mat4 uMapMatrix;
 
       void main() {
@@ -25,8 +28,8 @@
 
         gl_Position = position;
 
-        float diameter = aStart - aEnd;
-        gl_PointSize = uSize*100.;
+        float diameter = (aEnd - aStart) * uStep;
+        gl_PointSize = uSize*10. + (aStart + diameter)/100.0;
       }
     </script>
     <script id="point-fragment-shader" type="x-shader/x-fragment">
@@ -47,13 +50,26 @@
       var countryPointSizePixels = 1;
       var blockPointSizePixels = 10;
 
+      var f_timelapse;
+      var then = new Date();
+      var inMainLoop = false;
+      var inStartDwell = true;
+      var inEndDwell = false;
+      var totalTime = 1000;
+      var dwellTime = 1000;
+      var speed = 1.;
+      var minYear = 2000;
+      var currentYear = 2000;
+      var maxYear = 2013;
       var refugees = {
         url: "unhcr.bin",
         ready: false,
         pointCount: 0,
         data: null,
-        arrayBuffer: null
+        arrayBuffer: null,
+        years: [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013]
       };
+
 
       function load(url) {
         //console.log("Loading...");
@@ -95,14 +111,53 @@
       }
 
       function draw(transform) {
-        console.log('draw')
         if (refugees.ready) {
-          console.log('ready');
+
+          var now = new Date();
+          var deltaTime = now.getTime() - then.getTime();
+          var step = deltaTime/(totalTime * speed);
+          if (inMainLoop) {
+            if (deltaTime >= (totalTime*speed)) {
+              if (currentYear < maxYear - 1) {
+                step = 0.;
+                currentYear++;
+                then = new Date();
+
+              } else {
+                then = new Date();
+                inMainLoop = false;
+                inEndDwell = true;
+              }
+            }
+          }
+          else if (inStartDwell) {
+            step = 0.;
+            if (deltaTime >= dwellTime) {
+              inStartDwell = false;
+              inMainLoop = true;
+              then = new Date();
+            }
+          }
+          else {
+            step = 1.;
+            currentYear = maxYear;
+            if (deltaTime >= dwellTime) {
+              inEndDwell = false;
+              then = new Date();
+              inStartDwell = true;
+              currentYear = minYear;
+            }
+          }
+          step = Math.min(Math.max(step, 0.),1.);          
+          console.log(currentYear + ", " + step);
           gl.useProgram(program);
 
           var pointSize = countryPointSizePixels * Math.pow(blockPointSizePixels / countryPointSizePixels, (map.zoom - 7) / (21 - 7));
           var sizeLoc = gl.getUniformLocation(program, 'uSize');
           gl.uniform1f(sizeLoc, pointSize);
+
+          var stepLoc = gl.getUniformLocation(program, 'uStep');
+          gl.uniform1f(stepLoc, step);
 
           var matrixLoc = gl.getUniformLocation(program, 'uMapMatrix');
           gl.uniformMatrix4fv(matrixLoc, false, transform);
@@ -122,7 +177,9 @@
           gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 16, 12);
 
 
-          gl.drawArrays(gl.POINTS, 0, 1);
+          //gl.drawArrays(gl.POINTS, refugees.years.indexOf(currentYear), refugees.years.indexOf(currentYear) + 1);
+          gl.drawArrays(gl.POINTS, refugees.years.indexOf(currentYear), 1);
+
         }
       }
 
@@ -171,12 +228,11 @@
          -1,   1,   0, 1]);
       }
 
-
       function initCanvasLayer(map, update, resize) {
         var canvasLayerOptions = {
           map: map,
           resizeHandler: resize,
-          animate: false,
+          animate: true,
           updateHandler: update
         };
         return new CanvasLayer(canvasLayerOptions);
@@ -197,7 +253,7 @@
         gl = canvasLayer.canvas.getContext('experimental-webgl');
         glb = new Glb(gl);
         program = glb.programFromSources(document.getElementById('point-vertex-shader').text,
-                                         document.getElementById('point-fragment-shader').text);
+                                         document.getElementById('point-fragment-shader').text);        
         load(refugees.url);
       }
 
@@ -208,5 +264,7 @@
   </head>
   <body>
     <div id="map-div"></div>
+    <div id="timeSliderControls" style="position: absolute;  bottom: 0px; width: 100%; "></div>
+    <div id="timeMachine" style="display:none"></div>
   </body>
 </html>
