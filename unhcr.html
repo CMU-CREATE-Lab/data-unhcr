@@ -56,7 +56,7 @@
 
         float diameter = (aEnd - aStart) * uStep;
         float size = (aStart + diameter);
-        gl_PointSize = uSize + size/setDiameter(size);
+        gl_PointSize = 1.5*uSize + size/setDiameter(size);
         vColor = setDiameter(size);
       }
     </script>
@@ -65,14 +65,17 @@
       varying float vColor;
 
       void main() {
+        float dist = length(gl_PointCoord.xy - vec2(.5,.5));
+        float alpha = (dist > .5) ? .0 : 1.;
+
         if (vColor == 10.) {
-          gl_FragColor = vec4(.75, .15, .05, 1.);
+          gl_FragColor = vec4(.75, .15, .05, 1.) * alpha;
         } else if (vColor == 100.) {
-          gl_FragColor = vec4(.05, .75, .15, 1.);
+          gl_FragColor = vec4(.05, .75, .15, 1.) * alpha;
         } else if (vColor == 1000.) {
-          gl_FragColor = vec4(.05, .15, .75, 1.);
+          gl_FragColor = vec4(.05, .15, .75, 1.) * alpha;
         } else {
-          gl_FragColor = vec4(.75, .75, .15, 1.);
+          gl_FragColor = vec4(.75, .75, .15, 1.) * alpha;
         }
       }
 
