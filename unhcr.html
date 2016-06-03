@@ -69,13 +69,13 @@
         float alpha = (dist > .5) ? .0 : 1.;
 
         if (vColor == 10.) {
-          gl_FragColor = vec4(.75, .15, .05, 1.) * alpha;
+          gl_FragColor = vec4(.75, .15, .05, .75) * alpha;
         } else if (vColor == 100.) {
-          gl_FragColor = vec4(.05, .75, .15, 1.) * alpha;
+          gl_FragColor = vec4(.05, .75, .15, .75) * alpha;
         } else if (vColor == 1000.) {
-          gl_FragColor = vec4(.05, .15, .75, 1.) * alpha;
+          gl_FragColor = vec4(.05, .15, .75, .75) * alpha;
         } else {
-          gl_FragColor = vec4(.75, .75, .15, 1.) * alpha;
+          gl_FragColor = vec4(.75, .75, .15, .75) * alpha;
         }
       }
 
