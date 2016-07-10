@@ -19,20 +19,22 @@
     <script type="text/javascript" src="js/TimeSlider.js"></script>
 
     <script id="point-vertex-shader" type="x-shader/x-vertex">
-      attribute vec4 aCentroid; 
+      attribute vec4 aStartPoint; 
+      attribute vec4 aEndPoint; 
+      attribute vec4 aMidPoint; 
       attribute float aEpoch;
+      attribute float aCoo;
+      attribute float aCor;
 
       uniform float uSize;
       uniform float uEpoch;
       uniform float uSpan;
       uniform mat4 uMapMatrix;
 
-      float fX(float x, float deltaX, float t) {
-        return x + deltaX * t;
-      }
-
-      float fY(float y, float deltaY, float t) {
-        return y + deltaY * t;
+      vec4 bezierCurve(float t, vec4 P0, vec4 P1, vec4 P2) {
+        return (1.0-t)*(1.0-t)*P0 + 2.0*(1.0-t)*t*P1 + t*t*P2;
+        //return vec4((1.0 - t)*P0 + t*P2);
+        //return P0;
       }
 
       void main() {
@@ -43,14 +45,20 @@
           position = vec4(-1,-1,-1,-1);
         } else {
           float t = (uEpoch - aEpoch)/uSpan;
-          float fx = fX(aCentroid.z, aCentroid.z - aCentroid.x, t);
-          float fy = fY(aCentroid.w, aCentroid.w - aCentroid.y, t);
-          position = uMapMatrix * vec4(fx, fy, 0, 1);
+          vec4 pos = bezierCurve(1.0 + t, aStartPoint, aMidPoint, aEndPoint);
+
+          position = uMapMatrix * vec4(pos.x, pos.y, 0, 1);
+          //position = uMapMatrix * vec4(aMidPoint.x, aMidPoint.y, 0, 1);
+
         }
 
+        float coo = aCoo;
+        float cor = aCor;
 
         gl_Position = position;
         gl_PointSize = uSize;
+        gl_PointSize = 2.0;
+
       }
     </script>
     <script id="point-fragment-shader" type="x-shader/x-fragment">
@@ -75,12 +83,26 @@
       var blockPointSizePixels = 20;
 
       var refugees = {
-        url: "afg-deu-points.bin",
+        url: "animated-points-3.bin",
         ready: false,
         pointCount: 0,
         data: null,
-        arrayBuffer: null
-      };
+        arrayBuffer: null,
+        pointIdx: {
+                    2001: {'count': 756932, 'start': 0},
+                    2002: {'count': 941857, 'start': 756932},
+                    2003: {'count': 354892, 'start': 1698789},
+                    2004: {'count': 592040, 'start': 2053681},
+                    2005: {'count': 233373, 'start': 2645721},
+                    2006: {'count': 2172593, 'start': 2879094},
+                    2007: {'count': 1133828, 'start': 5051687},
+                    2008: {'count': 1638846, 'start': 6185515},
+                    2009: {'count': 851353, 'start': 7824361},
+                    2010: {'count': 457101, 'start': 8675714},
+                    2011: {'count': 703067, 'start': 9132815},
+                    2012: {'count': 1305917, 'start': 9835882},
+                    2013: {'count': 2219588, 'start': 11141799}}
+                  };
 
       var timeSlider;
 
@@ -101,19 +123,35 @@
       }
 
       function setData(buffer) {
-        refugees.pointCount = buffer.length / 5;
+        refugees.pointCount = buffer.length / 9;
         refugees.data = buffer;
         refugees.arrayBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, refugees.arrayBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, refugees.data, gl.STATIC_DRAW);
 
-        var attributeLoc = gl.getAttribLocation(program, 'aCentroid');
+        var attributeLoc = gl.getAttribLocation(program, 'aStartPoint');
         gl.enableVertexAttribArray(attributeLoc);
-        gl.vertexAttribPointer(attributeLoc, 4, gl.FLOAT, false, 20, 0);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 36, 0);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aEndPoint');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 36, 8);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aMidPoint');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 36, 16);
 
         var attributeLoc = gl.getAttribLocation(program, 'aEpoch');
         gl.enableVertexAttribArray(attributeLoc);
-        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 20, 16);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 36, 24);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aCoo');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 36, 28);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aCor');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 36, 32);
 
         refugees.ready = true;
         timeSlider.play();
@@ -141,23 +179,45 @@
 
           gl.bindBuffer(gl.ARRAY_BUFFER, refugees.arrayBuffer);
 
-          var attributeLoc = gl.getAttribLocation(program, 'aCentroid');
-          gl.enableVertexAttribArray(attributeLoc);
-          gl.vertexAttribPointer(attributeLoc, 4, gl.FLOAT, false, 20, 0);
+        var attributeLoc = gl.getAttribLocation(program, 'aStartPoint');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 36, 0);
 
-          var attributeLoc = gl.getAttribLocation(program, 'aEpoch');
-          gl.enableVertexAttribArray(attributeLoc);
-          gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 20, 16);
+        var attributeLoc = gl.getAttribLocation(program, 'aEndPoint');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 36, 8);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aMidPoint');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 2, gl.FLOAT, false, 36, 16);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aEpoch');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 36, 24);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aCoo');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 36, 28);
+
+        var attributeLoc = gl.getAttribLocation(program, 'aCor');
+        gl.enableVertexAttribArray(attributeLoc);
+        gl.vertexAttribPointer(attributeLoc, 1, gl.FLOAT, false, 36, 32);
 
 
-          var t = refugees.data[4];
-          var currentTime = timeSlider.getCurrentTime()/1000.;
-          var span = timeSlider.span_/1000.;
-          if ( currentTime >= t && currentTime <= t + span) {
-            console.log(t + ", " + currentTime + ", " + (currentTime - t)/span);
-          }
+        var year = new Date(timeSlider.getCurrentTime()).getFullYear();
+
+        var count;
+        if (year < 2001) {
+          year = 2001;
+        }
+         if (year != 2013) {
+          count = refugees.pointIdx[year]['count']*2.0;
+         } else {
+          count = refugees.pointIdx[year]['count'];
+
+         }
+          gl.drawArrays(gl.POINTS, refugees.pointIdx[year]['start'], count);
           //gl.drawArrays(gl.POINTS, 0, refugees.pointCount);
-          gl.drawArrays(gl.POINTS, 0, 1000);
         }
       }
 
@@ -239,8 +299,8 @@
         load(refugees.url);
 
         timeSlider = new TimeSlider({
-          startTime: new Date('2002-01-01').getTime(),
-          endTime: new Date('2003-12-31').getTime(),
+          startTime: new Date('2000-01-01').getTime(),
+          endTime: new Date('2013-12-31').getTime(),
           increment: 60*60*24*1000, // One day
           span: 120*24*60*60*1000, // Two month
           formatCurrentTime: function(date) {
