@@ -211,7 +211,7 @@
           year = 2001;
         }
          if (year != 2013) {
-          count = refugees.pointIdx[year]['count']*2.0;
+          count = refugees.pointIdx[year]['count'] + refugees.pointIdx[year+1]['count'];
          } else {
           count = refugees.pointIdx[year]['count'];
 
